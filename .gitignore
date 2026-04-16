@@ -1,7 +1,7 @@
 # PlatformIO
 .pio/
 .vscode/
-firmware/surcom-4g/.gitignore
+
 
 # builds
 *.bin
