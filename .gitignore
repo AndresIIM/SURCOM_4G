@@ -1,6 +1,7 @@
 # PlatformIO
 .pio/
 .vscode/
+firmware/surcom-4g/.gitignore
 
 # builds
 *.bin
@@ -18,3 +19,4 @@
 # OS
 .DS_Store
 Thumbs.db
+
