@@ -1,48 +1,42 @@
 #include <Arduino.h>
-#include "functions/config.h"
-#include "functions/hardware.h"
-#include "functions/task.h"
 
-// ---------------------------------------------------------------------------
-// Este es el archivo principal de la aplicación.
-// PlatformIO compila este archivo junto con los otros .cpp y crea el firmware.
-// Aquí se declara el hardware global y se levanta el programa.
-// ---------------------------------------------------------------------------
+#include "drivers/ads1220_driver.h"
+#include "sensors/durafet.h"
+#include "storage/sd_logger.h"
+#include "config/pins.h"
 
-// Objetos globales: declarados aquí y referenciados desde otros módulos.
-Adafruit_INA219 ina219;
-RTC_DS3231 rtc;
-ADS1220_WE ads1220(ADS1220_CS_PIN, ADS1220_DRDY_PIN);
-ModbusMaster node;
+ADS1220_Driver adc(ADS_CS, ADS_DRDY);
 
-uint32_t sensorReadIntervalMs = DEFAULT_SENSOR_INTERVAL_MS;
-uint32_t dataSendIntervalMs = DEFAULT_SEND_INTERVAL_MS;
-bool debugMode = DEFAULT_DEBUG_MODE;
-
-// RTOS
-QueueHandle_t sensorQueue;
-SemaphoreHandle_t sdSemaphore;
-SemaphoreHandle_t rs485Semaphore;
+float E0int25 = 0;
 
 void setup() {
-  Serial.begin(115200);
+    Serial.begin(115200);
 
-  initI2C();
-  initSD();
-  initRTC();
-  initADS();
-  initModbus();
+    if (!adc.begin()) {
+        Serial.println("ADS1220 ERROR");
+        while(1);
+    }
 
-  // Usamos una cola de longitud 1 para mantener siempre el último dato leído.
-  sensorQueue = xQueueCreate(1, sizeof(SensorData));
-  sdSemaphore = xSemaphoreCreateMutex();
-  rs485Semaphore = xSemaphoreCreateMutex();
+    if (!sdInit()) {
+        Serial.println("SD ERROR");
+    }
 
-  xTaskCreate(taskSensor, "Sensor", 4096, NULL, 3, NULL);
-  xTaskCreate(taskSD, "SD", 4096, NULL, 2, NULL);
-  xTaskCreate(taskWatchdog, "WD", 2048, NULL, 4, NULL);
+    E0int25 = calcularE0int25(76.40, 8.04, 26.8);
+
+    Serial.println("Sistema listo");
 }
 
 void loop() {
-  vTaskDelay(pdMS_TO_TICKS(10000));
+    float e = adc.readElectrode_mV();
+    float vt = adc.readThermistor_mV();
+
+    float temp = getDurafetTemp(vt / 1000.0);
+    float ph = calcularPH(e, E0int25, temp);
+
+    String line = String(ph,3) + "," + String(temp,2);
+
+    Serial.println(line);
+    sdAppend(line);
+
+    delay(5000);
 }
